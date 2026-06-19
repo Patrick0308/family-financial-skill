@@ -116,3 +116,24 @@ def income_statement(txns):
         "支出合计": exp_total,
         "月结余": inc_total - exp_total,
     }
+
+
+def _net_for_class(txns, flow_class):
+    net = 0
+    for t in txns:
+        if t.flow_class != flow_class:
+            continue
+        net += t.amount if t.direction == "流入" else -t.amount
+    return net
+
+
+def cash_flow_statement(txns):
+    op = _net_for_class(txns, "经营")
+    inv = _net_for_class(txns, "投资")
+    fin = _net_for_class(txns, "筹资")
+    return {
+        "经营性净现金流": op,
+        "投资性净现金流": inv,
+        "筹资性净现金流": fin,
+        "净现金流合计": op + inv + fin,
+    }

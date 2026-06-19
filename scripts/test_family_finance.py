@@ -106,3 +106,22 @@ def test_income_statement_groups_and_surplus():
     assert is_["收入合计"] == 21000
     assert is_["支出合计"] == 8000
     assert is_["月结余"] == 13000
+
+
+from scripts.family_finance import cash_flow_statement
+
+
+def test_cash_flow_by_class_and_net():
+    txns = [
+        Txn("2026-06-01", "收入", "经营", "流入", "工资", 20000),
+        Txn("2026-06-10", "支出", "经营", "流出", "餐饮", 8000),
+        Txn("2026-06-15", "转移", "投资", "流出", "基金买入", 10000),
+        Txn("2026-06-20", "转移", "投资", "流入", "基金赎回", 3000),
+        Txn("2026-06-25", "转移", "筹资", "流出", "房贷还本", 4000),
+        Txn("2026-06-28", "转移", "筹资", "流入", "借入", 5000),
+    ]
+    cf = cash_flow_statement(txns)
+    assert cf["经营性净现金流"] == 12000   # 20000 - 8000
+    assert cf["投资性净现金流"] == -7000   # 3000 - 10000
+    assert cf["筹资性净现金流"] == 1000    # 5000 - 4000
+    assert cf["净现金流合计"] == 6000
