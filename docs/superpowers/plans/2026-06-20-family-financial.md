@@ -550,7 +550,7 @@ def test_compute_ratios():
     ]
     r = compute_ratios(snap, txns)
     assert round(r["结余比率"], 4) == 0.5          # (20000-10000)/20000
-    assert round(r["资产负债率"], 4) == 0.5102     # 510000/1000000
+    assert round(r["资产负债率"], 4) == 0.51       # 510000/1000000
     assert round(r["偿债收入比"], 4) == 0.2        # 4000/20000
     assert round(r["应急储备"], 4) == 20.0         # 200000/10000
     assert round(r["投资资产比"], 4) == 0.2        # 200000/1000000
