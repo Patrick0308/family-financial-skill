@@ -39,3 +39,33 @@ def test_load_balances_with_tags(tmp_path):
 def test_load_missing_file_returns_empty(tmp_path):
     assert load_transactions(str(tmp_path / "nope.csv")) == []
     assert load_balances(str(tmp_path / "nope.csv")) == []
+
+
+from scripts.family_finance import txns_in_month, latest_snapshot
+
+
+def test_txns_in_month():
+    txns = [
+        Txn("2026-05-31", "支出", "经营", "流出", "餐饮", 10),
+        Txn("2026-06-01", "支出", "经营", "流出", "餐饮", 20),
+        Txn("2026-06-30", "收入", "经营", "流入", "工资", 30),
+        Txn("2026-07-01", "支出", "经营", "流出", "餐饮", 40),
+    ]
+    got = txns_in_month(txns, "2026-06")
+    assert [t.amount for t in got] == [20, 30]
+
+
+def test_latest_snapshot_picks_most_recent_on_or_before_month_end():
+    bals = [
+        Bal("2026-05-31", "资产", "活期", 100),
+        Bal("2026-06-10", "资产", "活期", 200),
+        Bal("2026-06-10", "负债", "房贷", 50),
+        Bal("2026-07-05", "资产", "活期", 999),  # 超出 6 月，应忽略
+    ]
+    snap = latest_snapshot(bals, "2026-06")
+    assert {b.item: b.amount for b in snap} == {"活期": 200, "房贷": 50}
+
+
+def test_latest_snapshot_empty_when_none_before_month():
+    bals = [Bal("2026-07-05", "资产", "活期", 999)]
+    assert latest_snapshot(bals, "2026-06") == []
