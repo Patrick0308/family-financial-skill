@@ -4,6 +4,7 @@ import csv
 import os
 import calendar
 from dataclasses import dataclass
+from collections import OrderedDict
 
 
 @dataclass
@@ -92,4 +93,26 @@ def balance_sheet(snap):
         "资产合计": a_total,
         "负债合计": l_total,
         "净资产": a_total - l_total,
+    }
+
+
+def _group_sum(pairs):
+    """[(cat, amt), ...] -> [(cat, total), ...]，保持首次出现顺序。"""
+    acc = OrderedDict()
+    for cat, amt in pairs:
+        acc[cat] = acc.get(cat, 0) + amt
+    return list(acc.items())
+
+
+def income_statement(txns):
+    inc = _group_sum([(t.category, t.amount) for t in txns if t.type == "收入"])
+    exp = _group_sum([(t.category, t.amount) for t in txns if t.type == "支出"])
+    inc_total = sum(a for _, a in inc)
+    exp_total = sum(a for _, a in exp)
+    return {
+        "收入明细": inc,
+        "支出明细": exp,
+        "收入合计": inc_total,
+        "支出合计": exp_total,
+        "月结余": inc_total - exp_total,
     }

@@ -87,3 +87,22 @@ def test_balance_sheet_totals_and_net_worth():
     assert bs["净资产"] == 1230000
     assert bs["资产明细"] == [("活期", 50000), ("自住房", 2000000)]
     assert bs["负债明细"] == [("房贷", 800000), ("信用卡", 20000)]
+
+
+from scripts.family_finance import income_statement
+
+
+def test_income_statement_groups_and_surplus():
+    txns = [
+        Txn("2026-06-01", "收入", "经营", "流入", "工资", 20000),
+        Txn("2026-06-05", "收入", "投资", "流入", "投资收益", 1000),
+        Txn("2026-06-10", "支出", "经营", "流出", "餐饮", 3000),
+        Txn("2026-06-12", "支出", "经营", "流出", "居住", 5000),
+        Txn("2026-06-15", "转移", "投资", "流出", "基金买入", 10000),  # 不计入收支
+    ]
+    is_ = income_statement(txns)
+    assert is_["收入明细"] == [("工资", 20000), ("投资收益", 1000)]
+    assert is_["支出明细"] == [("餐饮", 3000), ("居住", 5000)]
+    assert is_["收入合计"] == 21000
+    assert is_["支出合计"] == 8000
+    assert is_["月结余"] == 13000
