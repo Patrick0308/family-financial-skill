@@ -137,3 +137,29 @@ def cash_flow_statement(txns):
         "筹资性净现金流": fin,
         "净现金流合计": op + inv + fin,
     }
+
+
+def _safe_div(num, den):
+    return num / den if den else 0.0
+
+
+def compute_ratios(snap, txns):
+    bs = balance_sheet(snap)
+    is_ = income_statement(txns)
+    liquid_assets = sum(
+        b.amount for b in snap if b.kind == "资产" and b.liquidity == "流动"
+    )
+    investable_assets = sum(
+        b.amount for b in snap if b.kind == "资产" and b.nature == "可投资"
+    )
+    debt_service = sum(
+        t.amount for t in txns if t.flow_class == "筹资" and t.direction == "流出"
+    )
+    exp_total = is_["支出合计"]
+    return {
+        "结余比率": _safe_div(is_["月结余"], is_["收入合计"]),
+        "资产负债率": _safe_div(bs["负债合计"], bs["资产合计"]),
+        "偿债收入比": _safe_div(debt_service, is_["收入合计"]),
+        "应急储备": _safe_div(liquid_assets, exp_total) if exp_total else None,
+        "投资资产比": _safe_div(investable_assets, bs["资产合计"]),
+    }
