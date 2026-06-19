@@ -293,7 +293,7 @@ def wealth_tier(amount):
 
 
 def _yuan(x):
-    return f"¥{x:,.0f}"
+    return f"-¥{-x:,.0f}" if x < 0 else f"¥{x:,.0f}"
 
 
 def _rows_table(headers, rows):
