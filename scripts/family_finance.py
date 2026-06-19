@@ -290,3 +290,87 @@ def wealth_tier(amount):
             return {"等级": name, "下一档": nxt, "距下一档": hi - amount}
     # amount < 0 落到起步
     return {"等级": _TIERS[0][0], "下一档": _TIERS[1][0], "距下一档": _TIERS[0][2] - amount}
+
+
+def _yuan(x):
+    return f"¥{x:,.0f}"
+
+
+def _rows_table(headers, rows):
+    out = ["| " + " | ".join(headers) + " |",
+           "| " + " | ".join(["---"] * len(headers)) + " |"]
+    for r in rows:
+        out.append("| " + " | ".join(str(c) for c in r) + " |")
+    return "\n".join(out)
+
+
+def render_report(ym, snap, txns):
+    parts = [f"# {ym} 家庭财务报表\n"]
+
+    # 一、资产负债表
+    parts.append("## 一、资产负债表\n")
+    if not snap:
+        parts.append("> 暂无资产负债快照，请先用「更新余额」记录一次。\n")
+        bs = {"资产合计": 0, "负债合计": 0, "净资产": 0}
+    else:
+        bs = balance_sheet(snap)
+        rows = [("资产", item, _yuan(amt)) for item, amt in bs["资产明细"]]
+        rows += [("负债", item, _yuan(amt)) for item, amt in bs["负债明细"]]
+        parts.append(_rows_table(["类型", "项目", "金额"], rows))
+        parts.append(
+            f"\n- 资产合计：{_yuan(bs['资产合计'])}　负债合计：{_yuan(bs['负债合计'])}"
+            f"　**净资产：{_yuan(bs['净资产'])}**\n"
+        )
+
+    # 二、收入支出表
+    is_ = income_statement(txns)
+    parts.append("## 二、收入支出表\n")
+    rows = [("收入", c, _yuan(a)) for c, a in is_["收入明细"]]
+    rows += [("支出", c, _yuan(a)) for c, a in is_["支出明细"]]
+    parts.append(_rows_table(["类型", "分类", "金额"], rows) if rows else "> 本月无收支流水。")
+    parts.append(
+        f"\n- 收入合计：{_yuan(is_['收入合计'])}　支出合计：{_yuan(is_['支出合计'])}"
+        f"　**月结余：{_yuan(is_['月结余'])}**\n"
+    )
+
+    # 三、现金流表
+    cf = cash_flow_statement(txns)
+    parts.append("## 三、现金流表\n")
+    parts.append(_rows_table(["项目", "金额"], [
+        ("经营性净现金流", _yuan(cf["经营性净现金流"])),
+        ("投资性净现金流", _yuan(cf["投资性净现金流"])),
+        ("筹资性净现金流", _yuan(cf["筹资性净现金流"])),
+        ("**净现金流合计**", f"**{_yuan(cf['净现金流合计'])}**"),
+    ]))
+    parts.append("")
+
+    # 四、健康评分
+    ratios = compute_ratios(snap, txns)
+    hs = health_score(ratios)
+    parts.append("## 四、财务健康评分\n")
+    em = "—" if ratios["应急储备"] is None else f"{ratios['应急储备']:.1f} 个月"
+    parts.append(_rows_table(["指标", "数值", "子分"], [
+        ("结余比率", f"{ratios['结余比率']*100:.1f}%", f"{hs['子分']['结余比率']:.0f}"),
+        ("资产负债率", f"{ratios['资产负债率']*100:.1f}%", f"{hs['子分']['资产负债率']:.0f}"),
+        ("偿债收入比", f"{ratios['偿债收入比']*100:.1f}%", f"{hs['子分']['偿债收入比']:.0f}"),
+        ("应急储备", em, f"{hs['子分']['应急储备']:.0f}"),
+        ("投资资产比", f"{ratios['投资资产比']*100:.1f}%", f"{hs['子分']['投资资产比']:.0f}"),
+    ]))
+    parts.append(f"\n**综合评分：{hs['总分']} / 100（{hs['等级']}）**\n")
+    parts.append("建议：")
+    parts.extend(f"- {t}" for t in hs["建议"])
+    parts.append("")
+
+    # 五、财富等级
+    inw = investable_net_worth(snap)
+    wt = wealth_tier(inw)
+    parts.append("## 五、家庭财富等级\n")
+    line = f"**{wt['等级']}**（可投资净资产 {_yuan(inw)}；总净资产 {_yuan(bs['净资产'])}）"
+    if wt["下一档"]:
+        line += f"，距「{wt['下一档']}」还差 {_yuan(wt['距下一档'])}"
+    parts.append(line + "\n")
+
+    parts.append("---")
+    parts.append("> 免责声明：本报表为家庭自助记录工具，评分与等级为通用参考，"
+                 "不构成个性化投资建议；作者非持牌财务顾问。")
+    return "\n".join(parts) + "\n"

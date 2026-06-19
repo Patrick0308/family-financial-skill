@@ -208,3 +208,39 @@ def test_wealth_tier_top_has_no_next():
     assert res["等级"] == "超高净值"
     assert res["下一档"] is None
     assert res["距下一档"] is None
+
+
+from scripts.family_finance import render_report
+
+
+def test_render_report_contains_all_sections():
+    snap = [
+        Bal("2026-06-30", "资产", "活期", 200000, "流动", "可投资"),
+        Bal("2026-06-30", "资产", "自住房", 2000000, "非流动", "自用"),
+        Bal("2026-06-30", "负债", "房贷", 800000),
+    ]
+    txns = [
+        Txn("2026-06-01", "收入", "经营", "流入", "工资", 20000),
+        Txn("2026-06-10", "支出", "经营", "流出", "餐饮", 8000),
+    ]
+    md = render_report("2026-06", snap, txns)
+    for marker in [
+        "# 2026-06 家庭财务报表",
+        "## 一、资产负债表",
+        "## 二、收入支出表",
+        "## 三、现金流表",
+        "## 四、财务健康评分",
+        "## 五、家庭财富等级",
+        "净资产",
+        "月结余",
+        "净现金流合计",
+        "/ 100",
+        "非持牌",  # 免责声明
+    ]:
+        assert marker in md, marker
+
+
+def test_render_report_handles_no_snapshot():
+    txns = [Txn("2026-06-01", "收入", "经营", "流入", "工资", 20000)]
+    md = render_report("2026-06", [], txns)
+    assert "暂无资产负债快照" in md
