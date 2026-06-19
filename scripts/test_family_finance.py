@@ -210,6 +210,13 @@ def test_wealth_tier_top_has_no_next():
     assert res["距下一档"] is None
 
 
+def test_wealth_tier_negative_falls_into_qibu():
+    res = wealth_tier(-50000)
+    assert res["等级"] == "起步"
+    assert res["下一档"] == "稳健"
+    assert res["距下一档"] == 100000 - (-50000)  # 150000
+
+
 from scripts.family_finance import render_report
 
 

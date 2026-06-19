@@ -1,5 +1,6 @@
 # scripts/family_finance.py
 """家庭财务：计算三表、健康评分、财富等级，并渲染 Markdown 报表。仅用标准库。"""
+import argparse
 import csv
 import os
 import calendar
@@ -278,17 +279,16 @@ def investable_net_worth(snap):
 
 
 def wealth_tier(amount):
+    if amount < 0:
+        lo, hi = _TIERS[0][1], _TIERS[0][2]
+        return {"等级": _TIERS[0][0], "下一档": _TIERS[1][0], "距下一档": hi - amount}
     for i, (name, lo, hi) in enumerate(_TIERS):
-        if amount < 0:
-            name, hi = _TIERS[0][0], _TIERS[0][2]
-            i = 0
         in_tier = (amount >= lo) and (hi is None or amount < hi)
         if in_tier:
             if hi is None:
                 return {"等级": name, "下一档": None, "距下一档": None}
             nxt = _TIERS[i + 1][0]
             return {"等级": name, "下一档": nxt, "距下一档": hi - amount}
-    # amount < 0 落到起步
     return {"等级": _TIERS[0][0], "下一档": _TIERS[1][0], "距下一档": _TIERS[0][2] - amount}
 
 
@@ -311,7 +311,7 @@ def render_report(ym, snap, txns):
     parts.append("## 一、资产负债表\n")
     if not snap:
         parts.append("> 暂无资产负债快照，请先用「更新余额」记录一次。\n")
-        bs = {"资产合计": 0, "负债合计": 0, "净资产": 0}
+        bs = balance_sheet(snap)
     else:
         bs = balance_sheet(snap)
         rows = [("资产", item, _yuan(amt)) for item, amt in bs["资产明细"]]
@@ -374,9 +374,6 @@ def render_report(ym, snap, txns):
     parts.append("> 免责声明：本报表为家庭自助记录工具，评分与等级为通用参考，"
                  "不构成个性化投资建议；作者非持牌财务顾问。")
     return "\n".join(parts) + "\n"
-
-
-import argparse
 
 
 def main(argv=None):
