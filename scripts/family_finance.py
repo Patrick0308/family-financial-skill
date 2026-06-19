@@ -163,3 +163,94 @@ def compute_ratios(snap, txns):
         "应急储备": _safe_div(liquid_assets, exp_total) if exp_total else None,
         "投资资产比": _safe_div(investable_assets, bs["资产合计"]),
     }
+
+
+def _clamp(x, lo=0.0, hi=100.0):
+    return max(lo, min(hi, x))
+
+
+def _score_surplus(r):
+    if r >= 0.3:
+        return 100.0
+    if r < 0:
+        return 0.0
+    return r / 0.3 * 100
+
+
+def _score_debt_ratio(d):
+    if d <= 0.5:
+        return 100.0
+    if d >= 1:
+        return 0.0
+    return (1 - (d - 0.5) / 0.5) * 100
+
+
+def _score_debt_service(s):
+    if s <= 0.4:
+        return 100.0
+    if s >= 0.8:
+        return 0.0
+    return (1 - (s - 0.4) / 0.4) * 100
+
+
+def _score_emergency(m):
+    if m is None:
+        return 60.0
+    if m >= 6:
+        return 100.0
+    if m >= 3:
+        return 60 + (m - 3) / 3 * 40
+    return m / 3 * 60
+
+
+def _score_investment(p):
+    if 0.2 <= p <= 0.6:
+        return 100.0
+    if p < 0.2:
+        return p / 0.2 * 100
+    return _clamp((1 - (p - 0.6) / 0.4) * 100)
+
+
+_WEIGHTS = {
+    "结余比率": 25, "资产负债率": 25, "偿债收入比": 20,
+    "应急储备": 20, "投资资产比": 10,
+}
+
+
+def _grade(score):
+    if score >= 85:
+        return "优秀"
+    if score >= 70:
+        return "良好"
+    if score >= 55:
+        return "一般"
+    return "需改善"
+
+
+def _suggestions(ratios):
+    tips = []
+    if ratios["结余比率"] < 0.3:
+        tips.append("结余偏低：建议月结余占收入 30% 以上，优先压缩非必要支出。")
+    if ratios["资产负债率"] > 0.5:
+        tips.append("负债偏高：通用建议将总负债控制在总资产 50% 以内。")
+    if ratios["偿债收入比"] > 0.4:
+        tips.append("还款压力偏大：月还债额建议不超过月收入 40%。")
+    m = ratios["应急储备"]
+    if m is not None and m < 3:
+        tips.append("应急储备不足：建议预留可覆盖 3–6 个月支出的流动资金。")
+    if not tips:
+        tips.append("各项指标健康，保持现有节奏，定期复盘即可。")
+    return tips
+
+
+def health_score(ratios):
+    subs = {
+        "结余比率": _score_surplus(ratios["结余比率"]),
+        "资产负债率": _score_debt_ratio(ratios["资产负债率"]),
+        "偿债收入比": _score_debt_service(ratios["偿债收入比"]),
+        "应急储备": _score_emergency(ratios["应急储备"]),
+        "投资资产比": _score_investment(ratios["投资资产比"]),
+    }
+    total = sum(subs[k] * _WEIGHTS[k] for k in _WEIGHTS) / sum(_WEIGHTS.values())
+    total = round(total)
+    return {"总分": total, "等级": _grade(total), "子分": subs, "建议": _suggestions(ratios)}

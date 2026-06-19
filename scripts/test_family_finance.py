@@ -149,3 +149,33 @@ def test_compute_ratios():
     assert round(r["偿债收入比"], 4) == 0.2        # 4000/20000
     assert round(r["应急储备"], 4) == 20.0         # 200000/10000
     assert round(r["投资资产比"], 4) == 0.2        # 200000/1000000
+
+
+from scripts.family_finance import health_score
+
+
+def test_health_score_excellent():
+    ratios = {"结余比率": 0.4, "资产负债率": 0.3, "偿债收入比": 0.1,
+              "应急储备": 8.0, "投资资产比": 0.4}
+    res = health_score(ratios)
+    assert res["总分"] == 100
+    assert res["等级"] == "优秀"
+
+
+def test_health_score_weighted_midrange():
+    # 结余0.15→50; 负债0.75→50; 偿债0.6→50; 应急4.5→80; 投资0.1→50
+    # 加权 = 50*.25+50*.25+50*.20+80*.20+50*.10 = 12.5+12.5+10+16+5 = 56
+    ratios = {"结余比率": 0.15, "资产负债率": 0.75, "偿债收入比": 0.6,
+              "应急储备": 4.5, "投资资产比": 0.1}
+    res = health_score(ratios)
+    assert res["总分"] == 56
+    assert res["等级"] == "一般"
+    assert isinstance(res["建议"], list) and len(res["建议"]) >= 1
+
+
+def test_health_score_emergency_none_is_neutral():
+    ratios = {"结余比率": 0.3, "资产负债率": 0.5, "偿债收入比": 0.4,
+              "应急储备": None, "投资资产比": 0.4}
+    res = health_score(ratios)
+    # 100*.25+100*.25+100*.20+60*.20+100*.10 = 92
+    assert res["总分"] == 92
