@@ -374,3 +374,34 @@ def render_report(ym, snap, txns):
     parts.append("> 免责声明：本报表为家庭自助记录工具，评分与等级为通用参考，"
                  "不构成个性化投资建议；作者非持牌财务顾问。")
     return "\n".join(parts) + "\n"
+
+
+import argparse
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="family_finance")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    rep = sub.add_parser("report", help="生成某月报表")
+    rep.add_argument("month", help="YYYY-MM，如 2026-06")
+    rep.add_argument("--data-dir", default=".", help="数据目录（含 transactions.csv / balances.csv）")
+    args = parser.parse_args(argv)
+
+    if args.cmd == "report":
+        data_dir = args.data_dir
+        txns = load_transactions(os.path.join(data_dir, "transactions.csv"))
+        bals = load_balances(os.path.join(data_dir, "balances.csv"))
+        snap = latest_snapshot(bals, args.month)
+        md = render_report(args.month, snap, txns_in_month(txns, args.month))
+        out_dir = os.path.join(data_dir, "reports")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"{args.month}.md")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(md)
+        print(f"已生成报表：{out_path}")
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -244,3 +244,31 @@ def test_render_report_handles_no_snapshot():
     txns = [Txn("2026-06-01", "收入", "经营", "流入", "工资", 20000)]
     md = render_report("2026-06", [], txns)
     assert "暂无资产负债快照" in md
+
+
+import os
+from scripts.family_finance import main
+
+
+def test_main_report_writes_file(tmp_path, capsys):
+    data = tmp_path
+    _write_csv(
+        data / "transactions.csv",
+        ["日期", "类型", "现金流分类", "方向", "分类", "金额", "账户", "备注"],
+        [["2026-06-01", "收入", "经营", "流入", "工资", "20000", "", ""],
+         ["2026-06-10", "支出", "经营", "流出", "餐饮", "8000", "", ""]],
+    )
+    _write_csv(
+        data / "balances.csv",
+        ["日期", "类型", "项目", "金额", "流动性", "性质"],
+        [["2026-06-30", "资产", "活期", "200000", "流动", "可投资"],
+         ["2026-06-30", "负债", "房贷", "800000", "", ""]],
+    )
+    rc = main(["report", "2026-06", "--data-dir", str(data)])
+    assert rc == 0
+    out_path = data / "reports" / "2026-06.md"
+    assert out_path.exists()
+    content = out_path.read_text(encoding="utf-8")
+    assert "净资产" in content
+    # stdout 也打印路径，便于 Claude 读取
+    assert "2026-06.md" in capsys.readouterr().out
