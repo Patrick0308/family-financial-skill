@@ -254,3 +254,39 @@ def health_score(ratios):
     total = sum(subs[k] * _WEIGHTS[k] for k in _WEIGHTS) / sum(_WEIGHTS.values())
     total = round(total)
     return {"总分": total, "等级": _grade(total), "子分": subs, "建议": _suggestions(ratios)}
+
+
+# (等级名, 下限含, 上限不含)；上限 None 表示无上界
+_TIERS = [
+    ("起步", 0, 100_000),
+    ("稳健", 100_000, 1_000_000),
+    ("小康", 1_000_000, 5_000_000),
+    ("富裕", 5_000_000, 10_000_000),
+    ("高净值", 10_000_000, 100_000_000),
+    ("超高净值", 100_000_000, None),
+]
+
+
+def investable_net_worth(snap):
+    investable = sum(
+        b.amount for b in snap if b.kind == "资产" and b.nature == "可投资"
+    )
+    non_home_debt = sum(
+        b.amount for b in snap if b.kind == "负债" and b.item != "房贷"
+    )
+    return investable - non_home_debt
+
+
+def wealth_tier(amount):
+    for i, (name, lo, hi) in enumerate(_TIERS):
+        if amount < 0:
+            name, hi = _TIERS[0][0], _TIERS[0][2]
+            i = 0
+        in_tier = (amount >= lo) and (hi is None or amount < hi)
+        if in_tier:
+            if hi is None:
+                return {"等级": name, "下一档": None, "距下一档": None}
+            nxt = _TIERS[i + 1][0]
+            return {"等级": name, "下一档": nxt, "距下一档": hi - amount}
+    # amount < 0 落到起步
+    return {"等级": _TIERS[0][0], "下一档": _TIERS[1][0], "距下一档": _TIERS[0][2] - amount}

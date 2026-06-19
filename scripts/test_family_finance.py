@@ -179,3 +179,32 @@ def test_health_score_emergency_none_is_neutral():
     res = health_score(ratios)
     # 100*.25+100*.25+100*.20+60*.20+100*.10 = 92
     assert res["总分"] == 92
+
+
+from scripts.family_finance import investable_net_worth, wealth_tier
+
+
+def test_investable_net_worth_excludes_self_home_mortgage():
+    snap = [
+        Bal("2026-06-30", "资产", "活期", 300000, "流动", "可投资"),
+        Bal("2026-06-30", "资产", "基金", 200000, "流动", "可投资"),
+        Bal("2026-06-30", "资产", "自住房", 2000000, "非流动", "自用"),
+        Bal("2026-06-30", "负债", "房贷", 800000),
+        Bal("2026-06-30", "负债", "信用卡", 20000),
+    ]
+    # 可投资资产 500000 - 非房贷负债 20000 = 480000
+    assert investable_net_worth(snap) == 480000
+
+
+def test_wealth_tier_and_gap():
+    res = wealth_tier(1250000)
+    assert res["等级"] == "小康"
+    assert res["距下一档"] == 5000000 - 1250000  # 距「富裕」下限 500万
+    assert res["下一档"] == "富裕"
+
+
+def test_wealth_tier_top_has_no_next():
+    res = wealth_tier(150000000)
+    assert res["等级"] == "超高净值"
+    assert res["下一档"] is None
+    assert res["距下一档"] is None
