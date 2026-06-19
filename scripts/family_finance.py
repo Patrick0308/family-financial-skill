@@ -79,3 +79,17 @@ def latest_snapshot(bals, ym):
         return []
     latest_date = max(b.date for b in eligible)
     return [b for b in eligible if b.date == latest_date]
+
+
+def balance_sheet(snap):
+    assets = [(b.item, b.amount) for b in snap if b.kind == "资产"]
+    liabs = [(b.item, b.amount) for b in snap if b.kind == "负债"]
+    a_total = sum(a for _, a in assets)
+    l_total = sum(a for _, a in liabs)
+    return {
+        "资产明细": assets,
+        "负债明细": liabs,
+        "资产合计": a_total,
+        "负债合计": l_total,
+        "净资产": a_total - l_total,
+    }

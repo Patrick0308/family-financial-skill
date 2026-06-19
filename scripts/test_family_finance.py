@@ -69,3 +69,21 @@ def test_latest_snapshot_picks_most_recent_on_or_before_month_end():
 def test_latest_snapshot_empty_when_none_before_month():
     bals = [Bal("2026-07-05", "资产", "活期", 999)]
     assert latest_snapshot(bals, "2026-06") == []
+
+
+from scripts.family_finance import balance_sheet
+
+
+def test_balance_sheet_totals_and_net_worth():
+    snap = [
+        Bal("2026-06-30", "资产", "活期", 50000, "流动", "可投资"),
+        Bal("2026-06-30", "资产", "自住房", 2000000, "非流动", "自用"),
+        Bal("2026-06-30", "负债", "房贷", 800000),
+        Bal("2026-06-30", "负债", "信用卡", 20000),
+    ]
+    bs = balance_sheet(snap)
+    assert bs["资产合计"] == 2050000
+    assert bs["负债合计"] == 820000
+    assert bs["净资产"] == 1230000
+    assert bs["资产明细"] == [("活期", 50000), ("自住房", 2000000)]
+    assert bs["负债明细"] == [("房贷", 800000), ("信用卡", 20000)]
