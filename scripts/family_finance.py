@@ -301,6 +301,18 @@ def _yuan(x):
     return f"-¥{-x:,.0f}" if x < 0 else f"¥{x:,.0f}"
 
 
+def _valuation_note(b):
+    if not b.source or b.source == "手填":
+        return ""
+    parts = [b.source]
+    if b.valued_at:
+        parts.append(b.valued_at)
+    if b.confidence:
+        parts.append(b.confidence)
+    mark = " ⚠估" if b.source == "搜索" else ""
+    return f"{mark}（{'·'.join(parts)}）"
+
+
 def _rows_table(headers, rows):
     out = ["| " + " | ".join(headers) + " |",
            "| " + " | ".join(["---"] * len(headers)) + " |"]
@@ -319,8 +331,10 @@ def render_report(ym, snap, txns):
         bs = balance_sheet(snap)
     else:
         bs = balance_sheet(snap)
-        rows = [("资产", item, _yuan(amt)) for item, amt in bs["资产明细"]]
-        rows += [("负债", item, _yuan(amt)) for item, amt in bs["负债明细"]]
+        rows = [("资产", b.item + _valuation_note(b), _yuan(b.amount))
+                for b in snap if b.kind == "资产"]
+        rows += [("负债", b.item, _yuan(b.amount))
+                 for b in snap if b.kind == "负债"]
         parts.append(_rows_table(["类型", "项目", "金额"], rows))
         parts.append(
             f"\n- 资产合计：{_yuan(bs['资产合计'])}　负债合计：{_yuan(bs['负债合计'])}"
@@ -378,6 +392,8 @@ def render_report(ym, snap, txns):
     parts.append("---")
     parts.append("> 免责声明：本报表为家庭自助记录工具，评分与等级为通用参考，"
                  "不构成个性化投资建议；作者非持牌财务顾问。")
+    if any(b.kind == "资产" and b.source in ("行情", "搜索") for b in snap):
+        parts.append("> 含市场估值的项目为某时点估算，房产为区域均价粗估，仅供参考。")
     return "\n".join(parts) + "\n"
 
 

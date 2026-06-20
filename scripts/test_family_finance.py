@@ -305,3 +305,36 @@ def test_load_balances_without_provenance_columns_still_works(tmp_path):
     b = load_balances(str(p))[0]
     assert b.amount == 50000.0
     assert b.source == "" and b.valued_at == "" and b.confidence == ""
+
+
+def test_valuation_note_formats():
+    from scripts.family_finance import _valuation_note
+    quote = Bal("2026-06-30", "资产", "腾讯", 165400, "流动", "可投资",
+                "行情", "2026-06-20", "高")
+    est = Bal("2026-06-30", "资产", "投资房", 2000000, "非流动", "可投资",
+              "搜索", "2026-06-18", "低")
+    manual = Bal("2026-06-30", "资产", "活期", 50000, "流动", "可投资")
+    assert _valuation_note(quote) == "（行情·2026-06-20·高）"
+    assert _valuation_note(est) == " ⚠估（搜索·2026-06-18·低）"
+    assert _valuation_note(manual) == ""
+
+
+def test_render_report_annotates_estimated_assets():
+    snap = [
+        Bal("2026-06-30", "资产", "活期", 50000, "流动", "可投资"),
+        Bal("2026-06-30", "资产", "腾讯", 165400, "流动", "可投资",
+            "行情", "2026-06-20", "高"),
+        Bal("2026-06-30", "资产", "投资房", 2000000, "非流动", "可投资",
+            "搜索", "2026-06-18", "低"),
+    ]
+    md = render_report("2026-06", snap, [])
+    assert "腾讯（行情·2026-06-20·高）" in md
+    assert "投资房 ⚠估（搜索·2026-06-18·低）" in md
+    assert "活期 |" in md  # 手填项无标注，项目名后直接是表格分隔
+    assert "区域均价粗估" in md  # 估值免责行出现
+
+
+def test_render_report_no_valuation_disclaimer_when_all_manual():
+    snap = [Bal("2026-06-30", "资产", "活期", 50000, "流动", "可投资")]
+    md = render_report("2026-06", snap, [])
+    assert "区域均价粗估" not in md
