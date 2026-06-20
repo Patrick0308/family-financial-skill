@@ -338,3 +338,62 @@ def test_render_report_no_valuation_disclaimer_when_all_manual():
     snap = [Bal("2026-06-30", "资产", "活期", 50000, "流动", "可投资")]
     md = render_report("2026-06", snap, [])
     assert "区域均价粗估" not in md
+
+
+from scripts.family_finance import affordability
+
+
+def _snap_with_liquid(liquid, fixed=2000000):
+    return [
+        Bal("2026-06-30", "资产", "活期", liquid, "流动", "可投资"),
+        Bal("2026-06-30", "资产", "自住房", fixed, "非流动", "自用"),
+    ]
+
+
+def _txns_income_expense(income, expense):
+    out = []
+    if income:
+        out.append(Txn("2026-06-01", "收入", "经营", "流入", "工资", income))
+    if expense:
+        out.append(Txn("2026-06-10", "支出", "经营", "流出", "餐饮", expense))
+    return out
+
+
+def test_afford_lump_affordable():
+    snap = _snap_with_liquid(600000)   # 流动 60万
+    txns = _txns_income_expense(40000, 20000)  # 月支出 2万
+    r = affordability(snap, txns, 100000, "lump")  # 付10万 → 剩50万 → 25个月
+    assert r["判定"] == "可承受"
+    assert round(r["指标"]["付后应急储备"], 1) == 25.0
+    assert r["指标"]["流动资产剩余"] == 500000
+    assert r["临界值"]["一次性可承受上限"] == 600000 - 6 * 20000  # 480000
+
+
+def test_afford_lump_caution():
+    snap = _snap_with_liquid(200000)   # 流动 20万
+    txns = _txns_income_expense(40000, 20000)  # 月支出 2万
+    r = affordability(snap, txns, 100000, "lump")  # 剩10万 → 5个月 → 谨慎
+    assert r["判定"] == "谨慎"
+    assert round(r["指标"]["付后应急储备"], 1) == 5.0
+
+
+def test_afford_lump_not_advised_low_reserve():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 20000)
+    r = affordability(snap, txns, 160000, "lump")  # 剩4万 → 2个月 → 暂不建议
+    assert r["判定"] == "暂不建议"
+
+
+def test_afford_lump_not_advised_insufficient():
+    snap = _snap_with_liquid(50000)
+    txns = _txns_income_expense(40000, 20000)
+    r = affordability(snap, txns, 100000, "lump")  # 流动不够付
+    assert r["判定"] == "暂不建议"
+    assert isinstance(r["理由"], list) and r["理由"]
+
+
+def test_afford_lump_unknown_when_no_expense():
+    snap = _snap_with_liquid(600000)
+    txns = _txns_income_expense(40000, 0)  # 无支出
+    r = affordability(snap, txns, 100000, "lump")
+    assert r["判定"] == "无法评估"
