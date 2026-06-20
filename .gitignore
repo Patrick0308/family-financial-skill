@@ -4,5 +4,7 @@ __pycache__/
 # 用户真实数据，绝不入库（assets/ 下的空白模板不受影响）
 /transactions.csv
 /balances.csv
+/holdings.csv
+/properties.csv
 /reports/
 data/
