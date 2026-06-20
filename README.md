@@ -2,7 +2,7 @@
 
 > A portable **Agent Skill** for tracking family finances in natural language — auto-generates a balance sheet, income/expense statement, and cash-flow statement, plus a financial-health score and wealth tier.
 
-用自然语言记录家庭财务状况的 **Agent Skill**：你只管口头报账、报余额，技能自动整理成三张规范报表，并给出财务健康评分和家庭财富等级。
+用自然语言记录家庭财务状况的 **Agent Skill**：你只管口头报账、报余额，技能自动整理成三张规范报表，给出财务健康评分和家庭财富等级，还能按市价估值资产、对大额消费给可行性建议。
 
 计算由一个 **Python 标准库脚本**（零第三方依赖）完成，保证金额、合计、净值、评分都准确，不靠模型手算。
 
@@ -10,9 +10,11 @@
 
 - 🧾 **家庭资产负债表** —— 某时点的资产、负债、净资产
 - 💸 **收入支出表** —— 当期收入、支出、月结余
-- 🌊 **现金流表** —— 经营 / 投资 / 筹资三类净现金流
+- 🌊 **现金流表** —— 日常收支 / 投资进出 / 借还款三类净现金流
 - 🩺 **财务健康评分** —— 0–100 分 + 等级 + 通用理财建议（基于结余率、负债率、应急储备等指标）
-- 🏅 **家庭财富等级** —— 以「可投资净资产」为主轴分档
+- 🏅 **家庭财富等级** —— 以「可投资净资产」为主轴分档（阈值对齐招行/贝恩、胡润报告口径）
+- 💹 **资产估值** —— 录入股票/基金持仓、房产信息，按当前行情/区域均价折算人民币市值，报表标注来源与置信度
+- 🛒 **大额消费咨询** —— 「想买 X 万的车，合适吗？」基于你的财务状态判定可承受/谨慎/暂不建议，全款看应急储备、分期看现金面+还款面，并给可落地临界值
 
 ## 怎么用
 
@@ -23,9 +25,12 @@
 | 「记一笔：今天买菜 120」 | 追加一行流水（自动判断 支出/经营/餐饮） |
 | 「工资到账 20000」 | 追加流水（收入/经营/工资） |
 | 「更新余额：房贷剩 80 万、活期 5 万」 | 写一组资产负债快照 |
+| 「加持仓：腾讯 500 股」「房子，南山某小区 89 平自住」 | 记录持仓/房产，待估值 |
+| 「刷新估值」 | 按当前行情/汇率/区域均价折算人民币写入快照 |
+| 「想买 35 万的车，分期 36 期，合适吗？」 | 给可承受/谨慎/暂不建议 + 关键数字 + 临界值 |
 | 「出 6 月的表」 | 生成 `reports/2026-06.md`（三表 + 评分 + 等级） |
 
-数据以 CSV 存在你指定的目录（`transactions.csv` 流水、`balances.csv` 资产负债快照），报表输出到 `reports/`。可版本管理、可离线、可用 Excel/飞书打开。
+数据以 CSV 存在你指定的目录（`transactions.csv` 流水、`balances.csv` 资产负债快照、`holdings.csv` 持仓、`properties.csv` 房产），报表输出到 `reports/`。可版本管理、可离线、可用 Excel/飞书打开。含持仓与住址的文件不会进版本库。
 
 ## 安装
 
@@ -64,6 +69,10 @@ cp assets/balances.csv ./balances.csv
 # 编辑后出表
 python3 scripts/family_finance.py report 2026-06 --data-dir .
 cat reports/2026-06.md
+
+# 大额消费评估（全款 / 分期 / 含首付）
+python3 scripts/family_finance.py afford --amount 350000 --mode lump --data-dir .
+python3 scripts/family_finance.py afford --amount 350000 --mode installment --months 36 --down 100000 --data-dir .
 ```
 
 ## 样例报表
@@ -80,23 +89,27 @@ cat reports/2026-06.md
 ## 三、现金流表
 | 项目 | 金额 |
 | --- | --- |
-| 经营性净现金流 | ¥12,000 |
-| 投资性净现金流 | -¥9,000 |
-| 筹资性净现金流 | -¥4,000 |
-| **净现金流合计** | **-¥1,000** |
+| 日常收支净额（经营） | ¥12,000 |
+| 投资进出净额（投资） | -¥9,000 |
+| 借还款净额（筹资） | -¥4,000 |
+| **当月现金净变动** | **-¥1,000** |
 
 ## 四、财务健康评分
 **综合评分：95 / 100（优秀）**
 
 ## 五、家庭财富等级
-**稳健**（可投资净资产 ¥190,000；总净资产 ¥1,690,000），距「小康」还差 ¥810,000
+**小康**（可投资净资产 ¥190,000；总净资产 ¥1,690,000），距「宽裕」还差 ¥310,000
 ```
+
+> 资产估值与消费咨询另有独立输出（报表会标注估算项，消费评估通过 `afford` 命令或自然语言触发）。
 
 ## 自定义
 
 - **分类**：编辑 [`references/categories-default.md`](references/categories-default.md)
 - **评分阈值与权重**：见 [`references/scoring.md`](references/scoring.md)，与 `scripts/family_finance.py` 中的常量对应，改了两处要一起改并更新测试
-- **财富等级分档**：见 [`references/wealth-tiers.md`](references/wealth-tiers.md)（默认值为经验分档，非官方标准，建议按地区调整）
+- **财富等级分档**：见 [`references/wealth-tiers.md`](references/wealth-tiers.md)（阈值对齐招行/贝恩、胡润报告，可按地区调整）
+- **估值口径**：见 [`references/valuation.md`](references/valuation.md)（代码后缀、汇率、置信度、隐私约束）
+- **消费评估口径**：见 [`references/affordability.md`](references/affordability.md)（一次性/分期判定、现金面+还款面、临界值）
 
 ## 开发
 
