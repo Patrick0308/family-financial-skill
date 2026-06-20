@@ -517,6 +517,7 @@ def main(argv=None):
                      help="lump 一次性 / installment 分期")
     aff.add_argument("--monthly", type=float, default=None, help="分期月供（¥）")
     aff.add_argument("--months", type=int, default=None, help="分期期数")
+    aff.add_argument("--down", type=float, default=0, help="分期首付（¥），默认 0")
     aff.add_argument("--month", default=None, help="评估基于的月份 YYYY-MM，默认最近有流水的月份")
     aff.add_argument("--data-dir", default=".", help="数据目录")
     args = parser.parse_args(argv)
@@ -545,7 +546,8 @@ def main(argv=None):
             return 1
         snap = latest_snapshot(bals, ym)
         res = affordability(snap, txns_in_month(txns, ym),
-                            args.amount, args.mode, args.monthly, args.months)
+                            args.amount, args.mode, args.monthly, args.months,
+                            down=args.down)
         print(f"消费评估（基于 {ym}）：{_yuan(args.amount)} / "
               f"{'一次性' if args.mode == 'lump' else '分期'}")
         print(f"判定：{res['判定']}")
