@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-# 用户数据目录（示例），不入库
+# 用户真实数据，绝不入库（assets/ 下的空白模板不受影响）
+/transactions.csv
+/balances.csv
+/reports/
 data/
-*.report.md
