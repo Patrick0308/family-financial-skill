@@ -198,22 +198,22 @@ def test_investable_net_worth_excludes_self_home_mortgage():
 
 def test_wealth_tier_and_gap():
     res = wealth_tier(1250000)
-    assert res["等级"] == "小康"
-    assert res["距下一档"] == 5000000 - 1250000  # 距「富裕」下限 500万
-    assert res["下一档"] == "富裕"
+    assert res["等级"] == "宽裕"
+    assert res["距下一档"] == 6000000 - 1250000  # 距「富足」下限 600万
+    assert res["下一档"] == "富足"
 
 
 def test_wealth_tier_top_has_no_next():
     res = wealth_tier(150000000)
-    assert res["等级"] == "超高净值"
+    assert res["等级"] == "财富自由"
     assert res["下一档"] is None
     assert res["距下一档"] is None
 
 
-def test_wealth_tier_negative_falls_into_qibu():
+def test_wealth_tier_negative_falls_into_lowest():
     res = wealth_tier(-50000)
-    assert res["等级"] == "起步"
-    assert res["下一档"] == "稳健"
+    assert res["等级"] == "温饱"
+    assert res["下一档"] == "小康"
     assert res["距下一档"] == 100000 - (-50000)  # 150000
 
 
