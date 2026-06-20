@@ -408,6 +408,7 @@ def test_afford_installment_affordable():
     assert round(r["指标"]["新偿债收入比"], 4) == 0.225
     assert r["指标"]["新月结余"] == 25000 - 9000  # 16000
     assert r["临界值"]["可承受月供上限"] == 0.3 * 40000 - 0  # 12000
+    assert len(r["理由"]) == 2  # tier 0：现金面与还款面都列出
 
 
 def test_afford_installment_caution():
@@ -541,6 +542,7 @@ def test_afford_install_down_payment_drains_cash():
     # 付首付后流动 = 4万 → 应急 2 个月 → 暂不建议
     assert r["判定"] == "暂不建议"
     assert any("现金面" in x for x in r["理由"])
+    assert r["指标"]["付后应急储备"] == 2.0  # (200000-160000)/20000
 
 
 def test_afford_install_down_exceeds_liquid():
