@@ -66,7 +66,8 @@ cp <skill>/assets/balances.csv ./balances.csv
    **不明确就先确认**：全款还是分期？分期多少期或月供多少？
 2. 调脚本：
    `python3 <skill>/scripts/family_finance.py afford --amount 300000 --mode lump --data-dir .`
-   分期：`--mode installment --months 36`（或 `--monthly 9000`）。
+   分期：`--mode installment --months 36`（或 `--monthly 9000`）；有首付加 `--down 60000`。
+   分期会同时看「现金面（付首付后应急储备）」和「还款面（偿债比）」，取更严的一档。
 3. 把脚本输出的「判定 + 关键数字 + 临界值」转述给用户，并补一句可落地的替代方案
    （如「降到 ¥X 以内为可承受」「改 48 期月供降到 ¥Y」）。
 4. 这是基于用户数据的**消费预算分析**，**不做投资建议**；保留非持牌顾问免责。
