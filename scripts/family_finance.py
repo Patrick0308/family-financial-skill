@@ -337,10 +337,10 @@ def render_report(ym, snap, txns):
     cf = cash_flow_statement(txns)
     parts.append("## 三、现金流表\n")
     parts.append(_rows_table(["项目", "金额"], [
-        ("经营性净现金流", _yuan(cf["经营性净现金流"])),
-        ("投资性净现金流", _yuan(cf["投资性净现金流"])),
-        ("筹资性净现金流", _yuan(cf["筹资性净现金流"])),
-        ("**净现金流合计**", f"**{_yuan(cf['净现金流合计'])}**"),
+        ("日常收支净额（经营）", _yuan(cf["经营性净现金流"])),
+        ("投资进出净额（投资）", _yuan(cf["投资性净现金流"])),
+        ("借还款净额（筹资）", _yuan(cf["筹资性净现金流"])),
+        ("**当月现金净变动**", f"**{_yuan(cf['净现金流合计'])}**"),
     ]))
     parts.append("")
 
