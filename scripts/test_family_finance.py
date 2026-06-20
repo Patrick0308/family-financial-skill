@@ -397,3 +397,72 @@ def test_afford_lump_unknown_when_no_expense():
     txns = _txns_income_expense(40000, 0)  # 无支出
     r = affordability(snap, txns, 100000, "lump")
     assert r["判定"] == "无法评估"
+
+
+def test_afford_installment_affordable():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 15000)  # 月收入4万，无现有还债
+    r = affordability(snap, txns, 300000, "installment", monthly=9000)
+    # 偿债比 9000/40000 = 22.5% ≤30%，结余 40000-15000-9000>0
+    assert r["判定"] == "可承受"
+    assert round(r["指标"]["新偿债收入比"], 4) == 0.225
+    assert r["指标"]["新月结余"] == 25000 - 9000  # 16000
+    assert r["临界值"]["可承受月供上限"] == 0.3 * 40000 - 0  # 12000
+
+
+def test_afford_installment_caution():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 15000)
+    r = affordability(snap, txns, 300000, "installment", monthly=14000)
+    # 偿债比 14000/40000 = 35% → 谨慎
+    assert r["判定"] == "谨慎"
+    assert round(r["指标"]["新偿债收入比"], 4) == 0.35
+
+
+def test_afford_installment_not_advised_ratio():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 10000)
+    r = affordability(snap, txns, 500000, "installment", monthly=18000)
+    # 偿债比 18000/40000 = 45% >40% → 暂不建议
+    assert r["判定"] == "暂不建议"
+
+
+def test_afford_installment_not_advised_negative_surplus():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(20000, 18000)  # 结余仅 2000
+    r = affordability(snap, txns, 100000, "installment", monthly=5000)
+    # 结余 2000-5000 = -3000 <0 → 暂不建议（即便偿债比不高）
+    assert r["判定"] == "暂不建议"
+
+
+def test_afford_installment_estimates_monthly_from_months():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 15000)
+    r = affordability(snap, txns, 360000, "installment", months=36)
+    # 无息估月供 = 360000/36 = 10000；偿债比 25%
+    assert r["指标"]["月供"] == 10000
+    assert round(r["指标"]["新偿债收入比"], 4) == 0.25
+
+
+def test_afford_installment_existing_debt_counts():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 10000)
+    txns.append(Txn("2026-06-25", "转移", "筹资", "流出", "房贷还本", 6000))
+    r = affordability(snap, txns, 300000, "installment", monthly=8000)
+    # 现有还债6000 + 新8000 = 14000 / 40000 = 35% → 谨慎
+    assert r["判定"] == "谨慎"
+    assert r["临界值"]["可承受月供上限"] == 0.3 * 40000 - 6000  # 6000
+
+
+def test_afford_installment_unknown_when_no_income():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(0, 15000)
+    r = affordability(snap, txns, 300000, "installment", monthly=9000)
+    assert r["判定"] == "无法评估"
+
+
+def test_afford_installment_unknown_without_monthly_or_months():
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 15000)
+    r = affordability(snap, txns, 300000, "installment")
+    assert r["判定"] == "无法评估"
