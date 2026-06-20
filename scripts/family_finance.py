@@ -302,6 +302,7 @@ def _yuan(x):
 
 
 def _valuation_note(b):
+    """资产估值标注：（来源·日期·置信度）；搜索类前加 ⚠估；手填/无来源返回空串。"""
     if not b.source or b.source == "手填":
         return ""
     parts = [b.source]
@@ -326,11 +327,10 @@ def render_report(ym, snap, txns):
 
     # 一、资产负债表
     parts.append("## 一、资产负债表\n")
+    bs = balance_sheet(snap)
     if not snap:
         parts.append("> 暂无资产负债快照，请先用「更新余额」记录一次。\n")
-        bs = balance_sheet(snap)
     else:
-        bs = balance_sheet(snap)
         rows = [("资产", b.item + _valuation_note(b), _yuan(b.amount))
                 for b in snap if b.kind == "资产"]
         rows += [("负债", b.item, _yuan(b.amount))
