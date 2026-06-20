@@ -28,6 +28,9 @@ class Bal:
     amount: float
     liquidity: str = ""  # 流动 / 非流动
     nature: str = ""     # 可投资 / 自用
+    source: str = ""     # 来源: 行情 / 搜索 / 手填
+    valued_at: str = ""  # 估值日期 YYYY-MM-DD
+    confidence: str = "" # 置信度: 高 / 中 / 低
 
 
 def load_transactions(path):
@@ -53,6 +56,8 @@ def load_balances(path):
             out.append(Bal(
                 r["日期"], r["类型"], r["项目"], float(r["金额"]),
                 r.get("流动性", "") or "", r.get("性质", "") or "",
+                r.get("来源", "") or "", r.get("估值日期", "") or "",
+                r.get("置信度", "") or "",
             ))
     return out
 

@@ -279,3 +279,29 @@ def test_main_report_writes_file(tmp_path, capsys):
     assert "净资产" in content
     # stdout 也打印路径，便于 Claude 读取
     assert "2026-06.md" in capsys.readouterr().out
+
+
+def test_load_balances_reads_provenance_columns(tmp_path):
+    p = tmp_path / "balances.csv"
+    _write_csv(
+        p,
+        ["日期", "类型", "项目", "金额", "流动性", "性质", "来源", "估值日期", "置信度"],
+        [["2026-06-30", "资产", "腾讯", "165400", "流动", "可投资", "行情", "2026-06-20", "高"]],
+    )
+    b = load_balances(str(p))[0]
+    assert b.source == "行情"
+    assert b.valued_at == "2026-06-20"
+    assert b.confidence == "高"
+
+
+def test_load_balances_without_provenance_columns_still_works(tmp_path):
+    # 旧格式（无新列）必须照常加载，新字段为空
+    p = tmp_path / "balances.csv"
+    _write_csv(
+        p,
+        ["日期", "类型", "项目", "金额", "流动性", "性质"],
+        [["2026-06-30", "资产", "活期", "50000", "流动", "可投资"]],
+    )
+    b = load_balances(str(p))[0]
+    assert b.amount == 50000.0
+    assert b.source == "" and b.valued_at == "" and b.confidence == ""
