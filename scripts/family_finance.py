@@ -322,6 +322,114 @@ def _rows_table(headers, rows):
     return "\n".join(out)
 
 
+def _cannot_assess(reason):
+    return {"判定": "无法评估", "指标": {}, "临界值": None, "理由": [reason]}
+
+
+def affordability(snap, txns, amount, mode, monthly=None, months=None, down=0):
+    """评估一笔大额消费是否可承受。mode: 'lump' 一次性 / 'installment' 分期。"""
+    bs = balance_sheet(snap)
+    is_ = income_statement(txns)
+    income = is_["收入合计"]
+    expense = is_["支出合计"]
+    # surplus 为「收入−支出」，不含既有还本（属转移/筹资），分期判定按设计仅再减新月供
+    surplus = is_["月结余"]
+    liquid = sum(b.amount for b in snap if b.kind == "资产" and b.liquidity == "流动")
+    existing_debt = sum(
+        t.amount for t in txns if t.flow_class == "筹资" and t.direction == "流出"
+    )
+
+    if mode == "lump":
+        if expense <= 0:
+            return _cannot_assess("缺少当月支出数据，无法估算应急储备影响，请先记录本月支出。")
+        remaining = liquid - amount
+        post_emergency = remaining / expense
+        max_affordable = max(0.0, liquid - 6 * expense)
+        if amount > liquid:
+            verdict = "暂不建议"
+            reason = f"流动资产 {_yuan(liquid)} 不足以全款支付 {_yuan(amount)}。"
+        elif post_emergency < 3:
+            verdict = "暂不建议"
+            reason = f"付款后应急储备降至 {post_emergency:.1f} 个月（建议 ≥3 个月）。"
+        elif post_emergency < 6:
+            verdict = "谨慎"
+            reason = f"付款后应急储备 {post_emergency:.1f} 个月（处于 3–6 个月）。"
+        else:
+            verdict = "可承受"
+            reason = f"付款后应急储备仍有 {post_emergency:.1f} 个月（≥6 个月）。"
+        return {
+            "判定": verdict,
+            "指标": {"流动资产剩余": remaining, "付后应急储备": post_emergency},
+            "临界值": {"一次性可承受上限": max_affordable},
+            "理由": [reason],
+        }
+
+    if mode == "installment":
+        if income <= 0 or expense <= 0:
+            return _cannot_assess("分期评估需要当月收入与支出数据，请先记录本月收支。")
+        if down >= amount:
+            return _cannot_assess("首付已覆盖全价，请用全款（lump）评估。")
+        financed = amount - down
+        if monthly is None:
+            if months and months > 0:
+                monthly = financed / months
+            else:
+                return _cannot_assess("分期需要提供月供或期数。")
+
+        post_reserve = (liquid - down) / expense
+        new_ratio = (existing_debt + monthly) / income
+        new_surplus = surplus - monthly
+        new_debt_ratio = (bs["负债合计"] + financed) / bs["资产合计"] if bs["资产合计"] else 0.0
+        max_monthly = max(0.0, 0.3 * income - existing_debt)
+        max_down = max(0.0, liquid - 3 * expense)
+
+        # A 现金面
+        if down > liquid:
+            a_tier = 2
+            a_reason = f"首付 {_yuan(down)} 超过流动资产 {_yuan(liquid)}，连首付都掏不出。"
+        elif post_reserve < 3:
+            a_tier = 2
+            a_reason = f"付首付后应急储备降至 {post_reserve:.1f} 个月（建议 ≥3 个月）。"
+        elif post_reserve < 6:
+            a_tier = 1
+            a_reason = f"付首付后应急储备 {post_reserve:.1f} 个月（处于 3–6 个月）。"
+        else:
+            a_tier = 0
+            a_reason = f"付首付后应急储备仍有 {post_reserve:.1f} 个月（≥6 个月）。"
+
+        # B 还款面
+        if new_surplus < 0:
+            b_tier = 2
+            b_reason = f"新增月供 {_yuan(monthly)} 后月结余转负（{_yuan(new_surplus)}）。"
+        elif new_ratio > 0.4:
+            b_tier = 2
+            b_reason = f"偿债收入比升至 {new_ratio * 100:.1f}%（建议 ≤40%）。"
+        elif new_ratio > 0.3:
+            b_tier = 1
+            b_reason = f"偿债收入比 {new_ratio * 100:.1f}%（处于 30–40%）。"
+        else:
+            b_tier = 0
+            b_reason = f"偿债收入比 {new_ratio * 100:.1f}%（≤30%），月结余为正。"
+
+        tier = max(a_tier, b_tier)
+        verdict = ["可承受", "谨慎", "暂不建议"][tier]
+        reasons = []
+        if a_tier == tier:
+            reasons.append("现金面：" + a_reason)
+        if b_tier == tier:
+            reasons.append("还款面：" + b_reason)
+        return {
+            "判定": verdict,
+            "指标": {"付后应急储备": post_reserve, "月供": monthly,
+                     "新偿债收入比": new_ratio, "新月结余": new_surplus,
+                     "新负债率": new_debt_ratio},
+            "临界值": {"可承受月供上限": max_monthly, "首付上限": max_down},
+            "理由": reasons,
+        }
+
+    return _cannot_assess(f"未知付款方式：{mode}")
+
+
 def render_report(ym, snap, txns):
     parts = [f"# {ym} 家庭财务报表\n"]
 
@@ -403,6 +511,15 @@ def main(argv=None):
     rep = sub.add_parser("report", help="生成某月报表")
     rep.add_argument("month", help="YYYY-MM，如 2026-06")
     rep.add_argument("--data-dir", default=".", help="数据目录（含 transactions.csv / balances.csv）")
+    aff = sub.add_parser("afford", help="评估一笔大额消费是否可承受")
+    aff.add_argument("--amount", type=float, required=True, help="消费金额（¥）")
+    aff.add_argument("--mode", choices=["lump", "installment"], required=True,
+                     help="lump 一次性 / installment 分期")
+    aff.add_argument("--monthly", type=float, default=None, help="分期月供（¥）")
+    aff.add_argument("--months", type=int, default=None, help="分期期数")
+    aff.add_argument("--down", type=float, default=0, help="分期首付（¥），默认 0")
+    aff.add_argument("--month", default=None, help="评估基于的月份 YYYY-MM，默认最近有流水的月份")
+    aff.add_argument("--data-dir", default=".", help="数据目录")
     args = parser.parse_args(argv)
 
     if args.cmd == "report":
@@ -417,6 +534,36 @@ def main(argv=None):
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(md)
         print(f"已生成报表：{out_path}")
+        return 0
+
+    if args.cmd == "afford":
+        data_dir = args.data_dir
+        txns = load_transactions(os.path.join(data_dir, "transactions.csv"))
+        bals = load_balances(os.path.join(data_dir, "balances.csv"))
+        ym = args.month or max((month_of(t.date) for t in txns), default=None)
+        if not ym:
+            print("无流水数据，无法评估。请先记录本月收支。")
+            return 1
+        snap = latest_snapshot(bals, ym)
+        res = affordability(snap, txns_in_month(txns, ym),
+                            args.amount, args.mode, args.monthly, args.months,
+                            down=args.down)
+        print(f"消费评估（基于 {ym}）：{_yuan(args.amount)} / "
+              f"{'一次性' if args.mode == 'lump' else '分期'}")
+        print(f"判定：{res['判定']}")
+        for k, v in res["指标"].items():
+            if isinstance(v, float) and ("比" in k or "率" in k):
+                print(f"- {k}：{v * 100:.1f}%")
+            elif isinstance(v, float) and "储备" in k:
+                print(f"- {k}：{v:.1f} 个月")
+            else:
+                print(f"- {k}：{_yuan(v)}")
+        if res.get("临界值"):
+            for k, v in res["临界值"].items():
+                print(f"- {k}：{_yuan(v)}")
+        for r in res["理由"]:
+            print(f"  理由：{r}")
+        print("> 说明：基于你自身数据的消费预算分析，非投资建议；作者非持牌财务顾问。")
         return 0
     return 1
 
