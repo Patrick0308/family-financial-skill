@@ -31,32 +31,29 @@
 
 这是符合 [Agent Skills](https://www.anthropic.com/news/skills) 规范的技能（`SKILL.md` + frontmatter），可用于 Claude Code、Copilot CLI、Gemini CLI、Codex 等支持该格式的 agent。
 
-**一行命令安装**（用 [`degit`](https://github.com/Rich-Harris/degit) 拉取，无需 clone 历史）——把技能装进你所用 agent 的技能目录即可：
+**一行命令安装**（用 [`skills`](https://www.npmjs.com/package/skills) CLI，自动识别并装到你所用各 agent 的技能目录）：
 
 ```bash
-# Claude Code（个人级）
-npx degit Patrick0308/family-financial-skill ~/.claude/skills/family-finance
+npx skills add Patrick0308/family-financial-skill
 ```
 
-其它 agent 同理，只改目标目录：
-
-| Agent | 目标目录 |
-|---|---|
-| Claude Code（个人） | `~/.claude/skills/family-finance` |
-| Claude Code（项目级） | `.claude/skills/family-finance` |
-| Gemini CLI | `~/.gemini/skills/family-finance` |
-| Codex / 其它 | 该 agent 的技能/扩展目录下 `family-finance` |
+它会下载本仓库、识别 `SKILL.md`，并安装到检测到的 agent（Claude Code、Cursor、Copilot、Codex 等）对应目录。常用参数：
 
 ```bash
-# 例：装到当前项目（任何支持 .claude/skills 的工具）
-npx degit Patrick0308/family-financial-skill .claude/skills/family-finance
+npx skills add Patrick0308/family-financial-skill -g            # 全局安装（所有项目可用）
+npx skills add Patrick0308/family-financial-skill -a claude-code # 只装到指定 agent
+npx skills update                                                # 更新已装技能
+npx skills remove family-finance                                # 卸载
 ```
 
-> **说明**：各 agent 查找技能的目录不同，没有跨所有 agent 的统一路径，所以用「同一条 `npx` 命令 + 各自的技能目录」来覆盖。Copilot CLI 走插件机制，按其插件方式引入本仓库即可。
->
 > 装好后在 agent 里直接说「记一笔…」「出 X 月的表」即可触发。运行只需本机有 `python3`（macOS 自带）；`pytest` 仅开发期需要。
 
-**更新到最新版**：对同一目录重跑上面的 `npx degit … --force` 即可。
+**不想用 CLI？** 也可以用 [`degit`](https://github.com/Rich-Harris/degit) 直接拉到某个 agent 的技能目录：
+
+```bash
+npx degit Patrick0308/family-financial-skill ~/.claude/skills/family-finance   # Claude Code 个人级
+npx degit Patrick0308/family-financial-skill .claude/skills/family-finance     # 当前项目级
+```
 
 ## 直接用脚本（不经 agent）
 
