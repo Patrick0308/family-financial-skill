@@ -322,12 +322,17 @@ def _rows_table(headers, rows):
     return "\n".join(out)
 
 
+def _cannot_assess(reason):
+    return {"判定": "无法评估", "指标": {}, "临界值": None, "理由": [reason]}
+
+
 def affordability(snap, txns, amount, mode, monthly=None, months=None):
     """评估一笔大额消费是否可承受。mode: 'lump' 一次性 / 'installment' 分期。"""
     bs = balance_sheet(snap)
     is_ = income_statement(txns)
     income = is_["收入合计"]
     expense = is_["支出合计"]
+    # surplus 为「收入−支出」，不含既有还本（属转移/筹资），分期判定按设计仅再减新月供
     surplus = is_["月结余"]
     liquid = sum(b.amount for b in snap if b.kind == "资产" and b.liquidity == "流动")
     existing_debt = sum(
@@ -336,8 +341,7 @@ def affordability(snap, txns, amount, mode, monthly=None, months=None):
 
     if mode == "lump":
         if expense <= 0:
-            return {"判定": "无法评估", "指标": {}, "临界值": None,
-                    "理由": ["缺少当月支出数据，无法估算应急储备影响，请先记录本月支出。"]}
+            return _cannot_assess("缺少当月支出数据，无法估算应急储备影响，请先记录本月支出。")
         remaining = liquid - amount
         post_emergency = remaining / expense
         max_affordable = max(0.0, liquid - 6 * expense)
@@ -362,14 +366,12 @@ def affordability(snap, txns, amount, mode, monthly=None, months=None):
 
     if mode == "installment":
         if income <= 0:
-            return {"判定": "无法评估", "指标": {}, "临界值": None,
-                    "理由": ["缺少当月收入数据，无法估算偿债能力，请先记录本月收入。"]}
+            return _cannot_assess("缺少当月收入数据，无法估算偿债能力，请先记录本月收入。")
         if monthly is None:
             if months and months > 0:
                 monthly = amount / months
             else:
-                return {"判定": "无法评估", "指标": {}, "临界值": None,
-                        "理由": ["分期需要提供月供或期数。"]}
+                return _cannot_assess("分期需要提供月供或期数。")
         new_ratio = (existing_debt + monthly) / income
         new_surplus = surplus - monthly
         new_debt_ratio = (bs["负债合计"] + amount) / bs["资产合计"] if bs["资产合计"] else 0.0
@@ -394,8 +396,7 @@ def affordability(snap, txns, amount, mode, monthly=None, months=None):
             "理由": [reason],
         }
 
-    return {"判定": "无法评估", "指标": {}, "临界值": None,
-            "理由": [f"未知付款方式：{mode}"]}
+    return _cannot_assess(f"未知付款方式：{mode}")
 
 
 def render_report(ym, snap, txns):
