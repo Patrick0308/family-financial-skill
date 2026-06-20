@@ -504,3 +504,80 @@ def test_main_afford_installment_months(tmp_path, capsys):
                "--months", "36", "--data-dir", str(tmp_path)])
     assert rc == 0
     assert "判定" in capsys.readouterr().out
+
+
+def test_afford_install_blocked_by_cash_side():
+    # 还款面宽松（偿债比低），但现金薄：付后应急 <3 个月 → 暂不建议（现金面卡住）
+    snap = _snap_with_liquid(40000)            # 流动 4 万
+    txns = _txns_income_expense(40000, 20000)  # 月支出 2 万 → 4万/2万=2 个月
+    r = affordability(snap, txns, 300000, "installment", monthly=5000)  # 偿债比 12.5%
+    assert r["判定"] == "暂不建议"
+    assert any("现金面" in x for x in r["理由"])
+
+
+def test_afford_install_blocked_by_repay_side():
+    # 现金充裕（应急很高），但偿债比 >40% → 暂不建议（还款面卡住）
+    snap = _snap_with_liquid(2000000)          # 流动 200 万
+    txns = _txns_income_expense(40000, 10000)
+    r = affordability(snap, txns, 500000, "installment", monthly=18000)  # 45%
+    assert r["判定"] == "暂不建议"
+    assert any("还款面" in x for x in r["理由"])
+
+
+def test_afford_install_takes_stricter_tier():
+    # 现金面=谨慎（应急 4 个月），还款面=可承受（22.5%）→ 取谨慎
+    snap = _snap_with_liquid(80000)            # 流动 8 万
+    txns = _txns_income_expense(40000, 20000)  # 月支出 2 万 → 8万/2万=4 个月（谨慎）
+    r = affordability(snap, txns, 300000, "installment", monthly=9000)  # 22.5%（可承受）
+    assert r["判定"] == "谨慎"
+    assert any("现金面" in x for x in r["理由"])
+
+
+def test_afford_install_down_payment_drains_cash():
+    # 首付掏走大部分流动资产 → 现金面卡住
+    snap = _snap_with_liquid(200000)
+    txns = _txns_income_expense(40000, 20000)
+    r = affordability(snap, txns, 300000, "installment", monthly=6000, down=160000)
+    # 付首付后流动 = 4万 → 应急 2 个月 → 暂不建议
+    assert r["判定"] == "暂不建议"
+    assert any("现金面" in x for x in r["理由"])
+
+
+def test_afford_install_down_exceeds_liquid():
+    snap = _snap_with_liquid(50000)
+    txns = _txns_income_expense(40000, 20000)
+    r = affordability(snap, txns, 300000, "installment", monthly=6000, down=100000)
+    assert r["判定"] == "暂不建议"
+    assert any("首付" in x for x in r["理由"])
+
+
+def test_afford_install_financed_uses_amount_minus_down():
+    # 月供由 financed/months 推算：financed=(300000-60000)=240000，36期 → 月供 6666.67
+    snap = _snap_with_liquid(600000)
+    txns = _txns_income_expense(40000, 15000)
+    r = affordability(snap, txns, 300000, "installment", months=36, down=60000)
+    assert round(r["指标"]["月供"], 2) == round(240000 / 36, 2)
+
+
+def test_afford_install_thresholds():
+    snap = _snap_with_liquid(600000)
+    txns = _txns_income_expense(40000, 15000)
+    txns.append(Txn("2026-06-25", "转移", "筹资", "流出", "房贷还本", 4000))
+    r = affordability(snap, txns, 300000, "installment", monthly=8000)
+    assert r["临界值"]["可承受月供上限"] == 0.3 * 40000 - 4000   # 8000
+    assert r["临界值"]["首付上限"] == 600000 - 3 * 15000        # 555000
+
+
+def test_afford_install_down_ge_amount_unknown():
+    snap = _snap_with_liquid(600000)
+    txns = _txns_income_expense(40000, 15000)
+    r = affordability(snap, txns, 300000, "installment", monthly=8000, down=300000)
+    assert r["判定"] == "无法评估"
+    assert any("全款" in x for x in r["理由"])
+
+
+def test_afford_install_unknown_when_no_expense():
+    snap = _snap_with_liquid(600000)
+    txns = _txns_income_expense(40000, 0)  # 无支出 → A 无法算
+    r = affordability(snap, txns, 300000, "installment", monthly=8000)
+    assert r["判定"] == "无法评估"

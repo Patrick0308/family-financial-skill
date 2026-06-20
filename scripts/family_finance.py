@@ -326,7 +326,7 @@ def _cannot_assess(reason):
     return {"判定": "无法评估", "指标": {}, "临界值": None, "理由": [reason]}
 
 
-def affordability(snap, txns, amount, mode, monthly=None, months=None):
+def affordability(snap, txns, amount, mode, monthly=None, months=None, down=0):
     """评估一笔大额消费是否可承受。mode: 'lump' 一次性 / 'installment' 分期。"""
     bs = balance_sheet(snap)
     is_ = income_statement(txns)
@@ -365,35 +365,66 @@ def affordability(snap, txns, amount, mode, monthly=None, months=None):
         }
 
     if mode == "installment":
-        if income <= 0:
-            return _cannot_assess("缺少当月收入数据，无法估算偿债能力，请先记录本月收入。")
+        if income <= 0 or expense <= 0:
+            return _cannot_assess("分期评估需要当月收入与支出数据，请先记录本月收支。")
+        if down >= amount:
+            return _cannot_assess("首付已覆盖全价，请用全款（lump）评估。")
+        financed = amount - down
         if monthly is None:
             if months and months > 0:
-                monthly = amount / months
+                monthly = financed / months
             else:
                 return _cannot_assess("分期需要提供月供或期数。")
+
+        post_reserve = (liquid - down) / expense
         new_ratio = (existing_debt + monthly) / income
         new_surplus = surplus - monthly
-        new_debt_ratio = (bs["负债合计"] + amount) / bs["资产合计"] if bs["资产合计"] else 0.0
+        new_debt_ratio = (bs["负债合计"] + financed) / bs["资产合计"] if bs["资产合计"] else 0.0
         max_monthly = max(0.0, 0.3 * income - existing_debt)
-        if new_surplus < 0:
-            verdict = "暂不建议"
-            reason = f"新增月供 {_yuan(monthly)} 后月结余转负（{_yuan(new_surplus)}）。"
-        elif new_ratio > 0.4:
-            verdict = "暂不建议"
-            reason = f"偿债收入比升至 {new_ratio * 100:.1f}%（建议 ≤40%）。"
-        elif new_ratio > 0.3:
-            verdict = "谨慎"
-            reason = f"偿债收入比 {new_ratio * 100:.1f}%（处于 30–40%）。"
+        max_down = max(0.0, liquid - 3 * expense)
+
+        # A 现金面
+        if down > liquid:
+            a_tier = 2
+            a_reason = f"首付 {_yuan(down)} 超过流动资产 {_yuan(liquid)}，连首付都掏不出。"
+        elif post_reserve < 3:
+            a_tier = 2
+            a_reason = f"付首付后应急储备降至 {post_reserve:.1f} 个月（建议 ≥3 个月）。"
+        elif post_reserve < 6:
+            a_tier = 1
+            a_reason = f"付首付后应急储备 {post_reserve:.1f} 个月（处于 3–6 个月）。"
         else:
-            verdict = "可承受"
-            reason = f"偿债收入比 {new_ratio * 100:.1f}%（≤30%），月结余仍为正。"
+            a_tier = 0
+            a_reason = f"付首付后应急储备仍有 {post_reserve:.1f} 个月（≥6 个月）。"
+
+        # B 还款面
+        if new_surplus < 0:
+            b_tier = 2
+            b_reason = f"新增月供 {_yuan(monthly)} 后月结余转负（{_yuan(new_surplus)}）。"
+        elif new_ratio > 0.4:
+            b_tier = 2
+            b_reason = f"偿债收入比升至 {new_ratio * 100:.1f}%（建议 ≤40%）。"
+        elif new_ratio > 0.3:
+            b_tier = 1
+            b_reason = f"偿债收入比 {new_ratio * 100:.1f}%（处于 30–40%）。"
+        else:
+            b_tier = 0
+            b_reason = f"偿债收入比 {new_ratio * 100:.1f}%（≤30%），月结余为正。"
+
+        tier = max(a_tier, b_tier)
+        verdict = ["可承受", "谨慎", "暂不建议"][tier]
+        reasons = []
+        if a_tier == tier:
+            reasons.append("现金面：" + a_reason)
+        if b_tier == tier:
+            reasons.append("还款面：" + b_reason)
         return {
             "判定": verdict,
-            "指标": {"月供": monthly, "新偿债收入比": new_ratio,
-                     "新月结余": new_surplus, "新负债率": new_debt_ratio},
-            "临界值": {"可承受月供上限": max_monthly},
-            "理由": [reason],
+            "指标": {"付后应急储备": post_reserve, "月供": monthly,
+                     "新偿债收入比": new_ratio, "新月结余": new_surplus,
+                     "新负债率": new_debt_ratio},
+            "临界值": {"可承受月供上限": max_monthly, "首付上限": max_down},
+            "理由": reasons,
         }
 
     return _cannot_assess(f"未知付款方式：{mode}")
