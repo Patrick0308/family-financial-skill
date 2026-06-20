@@ -466,3 +466,41 @@ def test_afford_installment_unknown_without_monthly_or_months():
     txns = _txns_income_expense(40000, 15000)
     r = affordability(snap, txns, 300000, "installment")
     assert r["判定"] == "无法评估"
+
+
+def test_main_afford_lump_writes_stdout(tmp_path, capsys):
+    _write_csv(
+        tmp_path / "transactions.csv",
+        ["日期", "类型", "现金流分类", "方向", "分类", "金额", "账户", "备注"],
+        [["2026-06-01", "收入", "经营", "流入", "工资", "40000", "", ""],
+         ["2026-06-10", "支出", "经营", "流出", "餐饮", "20000", "", ""]],
+    )
+    _write_csv(
+        tmp_path / "balances.csv",
+        ["日期", "类型", "项目", "金额", "流动性", "性质"],
+        [["2026-06-30", "资产", "活期", "600000", "流动", "可投资"]],
+    )
+    rc = main(["afford", "--amount", "100000", "--mode", "lump",
+               "--data-dir", str(tmp_path)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "可承受" in out
+    assert "应急储备" in out
+
+
+def test_main_afford_installment_months(tmp_path, capsys):
+    _write_csv(
+        tmp_path / "transactions.csv",
+        ["日期", "类型", "现金流分类", "方向", "分类", "金额", "账户", "备注"],
+        [["2026-06-01", "收入", "经营", "流入", "工资", "40000", "", ""],
+         ["2026-06-10", "支出", "经营", "流出", "餐饮", "15000", "", ""]],
+    )
+    _write_csv(
+        tmp_path / "balances.csv",
+        ["日期", "类型", "项目", "金额", "流动性", "性质"],
+        [["2026-06-30", "资产", "活期", "200000", "流动", "可投资"]],
+    )
+    rc = main(["afford", "--amount", "360000", "--mode", "installment",
+               "--months", "36", "--data-dir", str(tmp_path)])
+    assert rc == 0
+    assert "判定" in capsys.readouterr().out

@@ -479,6 +479,14 @@ def main(argv=None):
     rep = sub.add_parser("report", help="生成某月报表")
     rep.add_argument("month", help="YYYY-MM，如 2026-06")
     rep.add_argument("--data-dir", default=".", help="数据目录（含 transactions.csv / balances.csv）")
+    aff = sub.add_parser("afford", help="评估一笔大额消费是否可承受")
+    aff.add_argument("--amount", type=float, required=True, help="消费金额（¥）")
+    aff.add_argument("--mode", choices=["lump", "installment"], required=True,
+                     help="lump 一次性 / installment 分期")
+    aff.add_argument("--monthly", type=float, default=None, help="分期月供（¥）")
+    aff.add_argument("--months", type=int, default=None, help="分期期数")
+    aff.add_argument("--month", default=None, help="评估基于的月份 YYYY-MM，默认最近有流水的月份")
+    aff.add_argument("--data-dir", default=".", help="数据目录")
     args = parser.parse_args(argv)
 
     if args.cmd == "report":
@@ -493,6 +501,35 @@ def main(argv=None):
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(md)
         print(f"已生成报表：{out_path}")
+        return 0
+
+    if args.cmd == "afford":
+        data_dir = args.data_dir
+        txns = load_transactions(os.path.join(data_dir, "transactions.csv"))
+        bals = load_balances(os.path.join(data_dir, "balances.csv"))
+        ym = args.month or max((month_of(t.date) for t in txns), default=None)
+        if not ym:
+            print("无流水数据，无法评估。请先记录本月收支。")
+            return 1
+        snap = latest_snapshot(bals, ym)
+        res = affordability(snap, txns_in_month(txns, ym),
+                            args.amount, args.mode, args.monthly, args.months)
+        print(f"消费评估（基于 {ym}）：{_yuan(args.amount)} / "
+              f"{'一次性' if args.mode == 'lump' else '分期'}")
+        print(f"判定：{res['判定']}")
+        for k, v in res["指标"].items():
+            if isinstance(v, float) and ("比" in k or "率" in k):
+                print(f"- {k}：{v * 100:.1f}%")
+            elif isinstance(v, float) and "储备" in k:
+                print(f"- {k}：{v:.1f} 个月")
+            else:
+                print(f"- {k}：{_yuan(v)}")
+        if res.get("临界值"):
+            for k, v in res["临界值"].items():
+                print(f"- {k}：{_yuan(v)}")
+        for r in res["理由"]:
+            print(f"  理由：{r}")
+        print("> 说明：基于你自身数据的消费预算分析，非投资建议；作者非持牌财务顾问。")
         return 0
     return 1
 
